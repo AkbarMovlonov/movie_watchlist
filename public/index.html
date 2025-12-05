@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Watched Movies</title>
+    <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Watched Movies</h1>
+            <p class="subtitle">Tiny multi-user watchlist</p>
+        </header>
+
+        <section class="controls">
+            <div class="control-group">
+                <label for="userSelect">Person:</label>
+                <select id="userSelect"></select>
+            </div>
+
+            <div class="control-group">
+                <label for="sortSelect">Sort watched by:</label>
+                <select id="sortSelect">
+                    <option value="added">Recently added</option>
+                    <option value="title">Title (A–Z)</option>
+                    <option value="year">Year (newest first)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label for="watchedFilter">Filter watched:</label>
+                <input id="watchedFilter" type="text" placeholder="Search in watched..." />
+            </div>
+        </section>
+
+        <section class="search-section">
+            <h2>Search & add movie</h2>
+            <div class="search-bar">
+                <input id="searchInput" type="text" placeholder="Search TVMaze..." />
+                <button id="searchBtn">Search</button>
+            </div>
+            <div id="searchResults" class="grid"></div>
+        </section>
+
+        <section class="manual-section">
+            <h2>Add custom movie</h2>
+            <div class="controls stacked">
+                <div class="control-group">
+                    <label for="manualTitle">Title:</label>
+                    <input id="manualTitle" type="text" placeholder="Название фильма" />
+                </div>
+
+                <div class="control-group">
+                    <label for="manualYear">Year (optional):</label>
+                    <input id="manualYear" type="text" placeholder="e.g. 2010" />
+                </div>
+
+                <div class="control-group">
+                    <label for="manualPosterUrl">Poster URL (optional):</label>
+                    <input id="manualPosterUrl" type="text" placeholder="https://..." />
+                </div>
+
+                <button id="manualAddBtn" class="primary-btn">Add manually</button>
+                <div id="manualError" class="error-text"></div>
+            </div>
+        </section>
+
+
+        <section class="watched-section">
+            <h2>Watched list</h2>
+            <div id="watchedGrid" class="grid"></div>
+        </section>
+
+        <footer>
+            <p>
+                Data from the TVMaze API.
+            </p>
+        </footer>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>
