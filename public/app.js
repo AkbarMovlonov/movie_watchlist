@@ -13,11 +13,12 @@ const manualPosterUrl = document.getElementById('manualPosterUrl');
 const manualAddBtn = document.getElementById('manualAddBtn');
 const manualError = document.getElementById('manualError');
 
-
 let users = [];
 let currentUserId = null;
-let watchedMovies = []; // full list from server
+let watchedMovies = [];
 let filterText = '';
+
+// --- INIT ---
 
 async function init() {
   await loadUsers();
@@ -31,28 +32,61 @@ async function init() {
 // --- API HELPERS ---
 
 async function loadUsers() {
-  const res = await fetch('/api/users');
-  users = await res.json();
-  userSelect.innerHTML = '';
-  for (const u of users) {
-    const opt = document.createElement('option');
-    opt.value = String(u.id);
-    opt.textContent = u.name;
-    userSelect.appendChild(opt);
+  try {
+    const res = await fetch('/api/users');
+    if (!res.ok) {
+      throw new Error(`Failed to load users: ${res.status}`);
+    }
+    users = await res.json();
+    userSelect.innerHTML = '';
+    for (const u of users) {
+      const opt = document.createElement('option');
+      opt.value = String(u.id);
+      opt.textContent = u.name;
+      userSelect.appendChild(opt);
+    }
+  } catch (err) {
+    console.error(err);
   }
 }
 
 async function loadWatchedMovies() {
   if (!currentUserId) return;
-  const res = await fetch(`/api/users/${currentUserId}/movies`);
-  watchedMovies = await res.json();
-  renderWatched();
+
+  try {
+    const res = await fetch(`/api/users/${currentUserId}/movies`);
+    if (!res.ok) {
+      console.error('Failed to load watched movies', res.status);
+      watchedMovies = [];
+      renderWatched();
+      return;
+    }
+    watchedMovies = await res.json();
+    if (!Array.isArray(watchedMovies)) {
+      watchedMovies = [];
+    }
+    renderWatched();
+  } catch (err) {
+    console.error(err);
+    watchedMovies = [];
+    renderWatched();
+  }
 }
 
 async function searchMovies(query) {
-  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-  const data = await res.json();
-  return data.results || [];
+  try {
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) {
+      searchResultsEl.textContent = 'Search failed.';
+      return [];
+    }
+    const data = await res.json();
+    return data.results || [];
+  } catch (err) {
+    console.error(err);
+    searchResultsEl.textContent = 'Search failed.';
+    return [];
+  }
 }
 
 async function addMovieToWatched(movie) {
@@ -60,7 +94,8 @@ async function addMovieToWatched(movie) {
     external_id: movie.external_id,
     title: movie.title,
     poster_url: movie.poster_url,
-    year: movie.year
+    year: movie.year,
+    type: movie.type || null
   };
 
   const res = await fetch(`/api/users/${currentUserId}/movies`, {
@@ -70,6 +105,11 @@ async function addMovieToWatched(movie) {
     },
     body: JSON.stringify(body)
   });
+
+  if (!res.ok) {
+    alert('Failed to add');
+    return;
+  }
 
   const data = await res.json();
   if (data.status === 'exists') {
@@ -108,7 +148,10 @@ function renderSearchResults(results) {
 
     const meta = document.createElement('div');
     meta.className = 'card-meta';
-    meta.textContent = m.year ? m.year : '';
+    const bits = [];
+    if (m.year) bits.push(m.year);
+    if (m.type) bits.push(m.type);
+    meta.textContent = bits.join(' • ');
     card.appendChild(meta);
 
     const actions = document.createElement('div');
@@ -126,7 +169,8 @@ function renderSearchResults(results) {
 }
 
 function getSortedWatched() {
-  let items = [...watchedMovies];
+  const base = Array.isArray(watchedMovies) ? watchedMovies : [];
+  let items = [...base];
 
   // Filter
   const q = filterText.trim().toLowerCase();
@@ -181,6 +225,7 @@ function renderWatched() {
     meta.className = 'card-meta';
     const bits = [];
     if (m.year) bits.push(m.year);
+    if (m.type) bits.push(m.type);
     if (m.added_at) bits.push(`added ${new Date(m.added_at).toLocaleDateString()}`);
     meta.textContent = bits.join(' • ');
     card.appendChild(meta);
@@ -205,9 +250,13 @@ function renderWatched() {
 
 async function handleRemove(movieId) {
   if (!confirm('Remove this movie?')) return;
-  await fetch(`/api/users/${currentUserId}/movies/${movieId}`, {
+  const res = await fetch(`/api/users/${currentUserId}/movies/${movieId}`, {
     method: 'DELETE'
   });
+  if (!res.ok) {
+    alert('Failed to remove');
+    return;
+  }
   await loadWatchedMovies();
 }
 
@@ -242,12 +291,12 @@ searchInput.addEventListener('keydown', e => {
 });
 
 manualAddBtn.addEventListener('click', async () => {
-  if (!currentUserId || !currentPassword) {
-    manualError.textContent = 'You must be logged in.';
+  manualError.textContent = '';
+
+  if (!currentUserId) {
+    manualError.textContent = 'Select a person first.';
     return;
   }
-
-  manualError.textContent = '';
 
   const title = manualTitle.value.trim();
   if (!title) {
@@ -264,17 +313,15 @@ manualAddBtn.addEventListener('click', async () => {
 
   const poster_url = manualPosterUrl.value.trim() || null;
 
-  // Use negative ID so it never collides with real TVMaze IDs (which are positive)
-  const external_id = -Date.now();
+  const external_id = `manual-${Date.now()}`;
+  const type = 'manual';
 
-  await addMovieToWatched({ external_id, title, year, poster_url });
+  await addMovieToWatched({ external_id, title, year, poster_url, type });
 
-  // Clear fields after successful add
   manualTitle.value = '';
   manualYear.value = '';
   manualPosterUrl.value = '';
 });
 
-
-// --- INIT ---
+// --- START ---
 init();
