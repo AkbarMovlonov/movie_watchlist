@@ -73,6 +73,22 @@
             <div id="watchedGrid" class="grid"></div>
         </section>
 
+        <section class="tools-section">
+            <h2>Backup</h2>
+            <div class="export-import">
+                <button id="exportBtn" class="primary-btn">Export JSON</button>
+
+                <label class="import-label">
+                    <span>Select JSON file</span>
+                    <input id="importFile" type="file" accept="application/json" />
+                </label>
+
+                <button id="importBtn">Import JSON</button>
+            </div>
+            <div id="importStatus" class="error-text"></div>
+        </section>
+
+
         <footer>
             <p>Data from the OMDb API.</p>
         </footer>

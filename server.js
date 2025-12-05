@@ -24,7 +24,6 @@ db.serialize(() => {
     )
   `);
 
-  // external_id is TEXT now (imdbID or manual-*), type is TEXT (movie/series/manual/etc)
   db.run(`
     CREATE TABLE IF NOT EXISTS movies (
       id INTEGER PRIMARY KEY,
@@ -155,7 +154,6 @@ app.delete('/api/users/:userId/movies/:movieId', (req, res) => {
 });
 
 // OMDb search
-// Uses: ?s=title&type=movie (we keep type filter as movie by default)
 app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').toString().trim();
 
@@ -167,7 +165,7 @@ app.get('/api/search', async (req, res) => {
     const params = new URLSearchParams({
       apikey: OMDB_API_KEY,
       s: q,
-      type: 'movie' // remove this if you also want series etc
+      type: 'movie' // remove if you also want series
     });
 
     const url = `https://www.omdbapi.com/?${params.toString()}`;
@@ -182,7 +180,6 @@ app.get('/api/search', async (req, res) => {
     const data = await response.json();
 
     if (data.Response === 'False') {
-      // e.g. { Response: "False", Error: "Movie not found!" }
       return res.json({ results: [] });
     }
 
@@ -191,8 +188,8 @@ app.get('/api/search', async (req, res) => {
       const yearStr = item.Year || '';
       const year = /^\d{4}$/.test(yearStr) ? Number(yearStr) : null;
       const poster = item.Poster && item.Poster !== 'N/A' ? item.Poster : null;
-      const type = item.Type || null; // movie, series, etc
-      const external_id = item.imdbID; // e.g. tt3896198
+      const type = item.Type || null;
+      const external_id = item.imdbID;
 
       return {
         external_id,
@@ -208,6 +205,89 @@ app.get('/api/search', async (req, res) => {
     console.error('OMDb search error:', e);
     res.status(500).json({ error: 'Search failed' });
   }
+});
+
+// EXPORT: dump all data as JSON
+app.get('/api/export', (req, res) => {
+  db.all(`SELECT id, name FROM users ORDER BY id`, (err, users) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'DB error' });
+    }
+
+    db.all(
+      `SELECT id, user_id, external_id, title, poster_url, year, type, added_at
+       FROM movies
+       ORDER BY user_id, id`,
+      (err2, movies) => {
+        if (err2) {
+          console.error(err2);
+          return res.status(500).json({ error: 'DB error' });
+        }
+
+        res.json({ users, movies });
+      }
+    );
+  });
+});
+
+// IMPORT: replace all data with provided JSON
+app.post('/api/import', (req, res) => {
+  const { users, movies } = req.body || {};
+
+  if (!Array.isArray(users) || !Array.isArray(movies)) {
+    return res.status(400).json({ error: 'users and movies must be arrays' });
+  }
+
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+
+    db.run(`DELETE FROM movies`);
+    db.run(`DELETE FROM users`);
+
+    const userStmt = db.prepare(
+      `INSERT INTO users (id, name) VALUES (?, ?)`
+    );
+    users.forEach(u => {
+      if (u && typeof u.id === 'number' && typeof u.name === 'string') {
+        userStmt.run(u.id, u.name);
+      }
+    });
+    userStmt.finalize();
+
+    const movieStmt = db.prepare(
+      `INSERT INTO movies (id, user_id, external_id, title, poster_url, year, type, added_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    movies.forEach(m => {
+      if (!m) return;
+      movieStmt.run(
+        m.id || null,
+        m.user_id,
+        m.external_id,
+        m.title,
+        m.poster_url || null,
+        m.year || null,
+        m.type || null,
+        m.added_at || new Date().toISOString()
+      );
+    });
+    movieStmt.finalize(err => {
+      if (err) {
+        console.error('Import error:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Import failed' });
+      }
+
+      db.run('COMMIT', commitErr => {
+        if (commitErr) {
+          console.error('Commit error:', commitErr);
+          return res.status(500).json({ error: 'Import failed' });
+        }
+        res.json({ status: 'ok' });
+      });
+    });
+  });
 });
 
 // --- START SERVER ---
